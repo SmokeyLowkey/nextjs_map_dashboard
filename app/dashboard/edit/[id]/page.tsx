@@ -6,7 +6,13 @@ import { useUser } from "@clerk/nextjs"
 import BranchForm from "@/components/branch-form"
 import { Branch, BranchFormData } from "@/types/branch"
 
-export default function EditBranchPage({ params }: { params: { id: string } }) {
+interface PageProps {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default function EditBranchPage({ params }: PageProps) {
+  const [id, setId] = useState<string | null>(null);
   const router = useRouter()
   const { user, isLoaded: isUserLoaded } = useUser()
   const [branch, setBranch] = useState<Branch | null>(null)
@@ -18,13 +24,22 @@ export default function EditBranchPage({ params }: { params: { id: string } }) {
   const userRole = user?.publicMetadata?.role as string
   const canEdit = userRole && !['employee', 'demo'].includes(userRole)
 
+  // Get the id from params
+  useEffect(() => {
+    const resolveParams = async () => {
+      const resolvedParams = await params;
+      setId(resolvedParams.id);
+    };
+    resolveParams();
+  }, [params]);
+
   useEffect(() => {
     const fetchBranch = async () => {
-      if (!isUserLoaded) return;
+      if (!isUserLoaded || !id) return;
       
       try {
         setError(null);
-        const response = await fetch(`/api/branches/${params.id}`, {
+        const response = await fetch(`/api/branches/${id}`, {
           credentials: 'include',
           headers: {
             'Accept': 'application/json'
@@ -53,15 +68,17 @@ export default function EditBranchPage({ params }: { params: { id: string } }) {
       }
     };
 
-    if (isUserLoaded) {
+    if (isUserLoaded && id) {
       fetchBranch();
     }
-  }, [params.id, isUserLoaded]);
+  }, [id, isUserLoaded]);
 
   const handleSubmit = async (data: BranchFormData) => {
+    if (!id) return;
+
     try {
       setSubmitError(null);
-      const response = await fetch(`/api/branches/${params.id}`, {
+      const response = await fetch(`/api/branches/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +156,7 @@ export default function EditBranchPage({ params }: { params: { id: string } }) {
     );
   }
 
-  if (isLoading) {
+  if (isLoading || !id) {
     return (
       <div className="container mx-auto p-6">
         <div className="max-w-4xl mx-auto">

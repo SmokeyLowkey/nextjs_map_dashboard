@@ -3,12 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import prisma from "../../../../lib/prisma";
 
 // Get a specific chat
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { chatId: string } }
-) {
+export async function GET(request: NextRequest) {
   try {
-    const { userId } = getAuth(req);
+    const chatId = request.nextUrl.pathname.split('/').pop();
+    const { userId } = getAuth(request);
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
@@ -23,7 +21,7 @@ export async function GET(
 
     const chat = await prisma.chatHistory.findUnique({
       where: { 
-        id: params.chatId,
+        id: chatId,
         userId: user.id 
       },
     });
@@ -41,12 +39,10 @@ export async function GET(
 }
 
 // Delete a specific chat
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { chatId: string } }
-) {
+export async function DELETE(request: NextRequest) {
   try {
-    const { userId } = getAuth(req);
+    const chatId = request.nextUrl.pathname.split('/').pop();
+    const { userId } = getAuth(request);
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
@@ -62,7 +58,7 @@ export async function DELETE(
     // First verify the chat belongs to the user
     const chat = await prisma.chatHistory.findUnique({
       where: {
-        id: params.chatId,
+        id: chatId,
         userId: user.id,
       },
     });
@@ -74,7 +70,7 @@ export async function DELETE(
     // Delete the chat
     await prisma.chatHistory.delete({
       where: {
-        id: params.chatId,
+        id: chatId,
       },
     });
 

@@ -4,7 +4,9 @@ import { currentUser } from '@clerk/nextjs/server';
 import { auth } from '@clerk/nextjs/server';
 
 // GET all branches
-export async function GET() {
+import { NextRequest } from 'next/server';
+
+export async function GET(request: NextRequest) {
   try {
     const user = await currentUser();
     
@@ -107,7 +109,7 @@ export async function GET() {
 }
 
 // POST new branch
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const user = await currentUser();
     

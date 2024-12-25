@@ -2,12 +2,9 @@ import { NextResponse } from 'next/server';
 import prisma from '../../../../lib/prisma';
 import { currentUser } from '@clerk/nextjs/server';
 
-// GET single branch
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: Request) {
   try {
+    const id = request.url.split('/').pop();
     const user = await currentUser();
     if (!user) {
       return new NextResponse(
@@ -37,7 +34,7 @@ export async function GET(
 
     const branch = await prisma.branch.findUnique({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         departments: {
@@ -103,12 +100,9 @@ export async function GET(
   }
 }
 
-// PUT update branch
-export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: Request) {
   try {
+    const id = request.url.split('/').pop();
     const user = await currentUser();
     if (!user) {
       return new NextResponse(
@@ -156,21 +150,21 @@ export async function PUT(
     await prisma.contact.deleteMany({
       where: {
         department: {
-          branchId: params.id
+          branchId: id
         }
       }
     });
 
     await prisma.department.deleteMany({
       where: {
-        branchId: params.id
+        branchId: id
       }
     });
 
     // Update branch with new data
     const branch = await prisma.branch.update({
       where: {
-        id: params.id,
+        id,
       },
       data: {
         branchId: data.branchId,
@@ -239,12 +233,9 @@ export async function PUT(
   }
 }
 
-// DELETE branch
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: Request) {
   try {
+    const id = request.url.split('/').pop();
     const user = await currentUser();
     if (!user) {
       return new NextResponse(
@@ -285,7 +276,7 @@ export async function DELETE(
     // Delete branch (this will cascade delete departments and contacts)
     await prisma.branch.delete({
       where: {
-        id: params.id,
+        id,
       },
     });
 

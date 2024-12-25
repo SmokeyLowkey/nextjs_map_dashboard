@@ -1,7 +1,9 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-export async function GET(request: Request) {
+import { NextRequest } from "next/server";
+
+export async function GET(request: NextRequest) {
   try {
     const authResult = await auth();
     if (!authResult?.userId) {

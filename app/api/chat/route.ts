@@ -22,7 +22,9 @@ type Message = {
   content: string
 }
 
-export async function POST(req: Request) {
+import { NextRequest } from 'next/server'
+
+export async function POST(req: NextRequest) {
   try {
     const { userId } = await auth()
     const user = await currentUser()
@@ -177,7 +179,8 @@ export async function POST(req: Request) {
         } else {
           // Extract model from user message if specified
           const modelMatch = latestMessage.match(/model:\s*([^\s,]+)/i);
-          const requestedModel = modelMatch ? modelMatch[1].toUpperCase() : null;
+          // Format model string to match database format (e.g., "650k" -> "650K")
+          const requestedModel = modelMatch ? modelMatch[1].replace(/([a-z])/g, (letter: string) => letter.toUpperCase()).trim() : null;
 
           // Normal vector search if we have valid embeddings
           const sum = Math.sqrt(embedding.reduce((acc, val) => acc + val * val, 0))
@@ -195,7 +198,7 @@ export async function POST(req: Request) {
             topK: 50, // Increased to ensure we get enough results after filtering
             includeMetadata: true,
             includeVectors: false,
-            filter: requestedModel ? `model = "${requestedModel}"` : undefined
+            filter: requestedModel ? `model = "${requestedModel.trim()}"` : undefined
           });
           
           // Apply similarity score filtering

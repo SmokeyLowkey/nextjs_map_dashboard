@@ -72,7 +72,9 @@ async function retryWithBackoff<T>(
   throw lastError
 }
 
-export async function POST(req: Request) {
+import { NextRequest } from 'next/server'
+
+export async function POST(req: NextRequest) {
   try {
     const { userId } = await auth()
     const user = await currentUser()
