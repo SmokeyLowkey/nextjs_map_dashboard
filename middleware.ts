@@ -1,11 +1,19 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
-const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
-
-export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) await auth.protect();
+// Export the middleware
+export default clerkMiddleware((req) => {
+  return NextResponse.next();
 });
 
+// Configure matcher to include both pages and API routes
 export const config = {
-  matcher: ["/((?!.*\\..*|_next).*)", "/"],
+  matcher: [
+    // Match all routes except static files
+    "/((?!_next/static|_next/image|favicon.ico).*)",
+    // Match root
+    "/",
+    // Match API routes
+    "/api/(.*)"
+  ]
 };

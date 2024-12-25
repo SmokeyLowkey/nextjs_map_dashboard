@@ -1,11 +1,20 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    remotePatterns: [ {
-        protocol: 'https',
-        hostname: 'img.clerk.com',
-        port: '',        
-      },],
+    domains: ['images.clerk.dev'],
+  },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: 'https://*.clerk.accounts.dev',
+          },
+        ],
+      },
+    ];
   },
 };
 

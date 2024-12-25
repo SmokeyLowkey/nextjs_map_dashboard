@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Branch {
+  id          String       @id @default(cuid())
+  branchId    String       @unique
+  branchName  String
+  latitude    Float
+  longitude   Float
+  address     String
+  phone       String?
+  fax         String?
+  toll        String?
+  itPhone     String?
+  timezone    String       @default("America/Toronto")
+  departments Department[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Department {
+  id              String    @id @default(cuid())
+  name            String
+  notes           Json?     @default("{}")
+  mondayHours     String?
+  tuesdayHours    String?
+  wednesdayHours  String?
+  thursdayHours   String?
+  fridayHours     String?
+  saturdayHours   String?
+  sundayHours     String?
+  branch          Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branchId        String
+  contacts        Contact[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Contact {
+  id           String     @id @default(cuid())
+  name         String
+  jobTitle     String?
+  phone        String?
+  email        String?
+  notes        Json?      @default("{}")
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  departmentId String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([departmentId])
+}
+
+model User {
+  id          String        @id @default(cuid())
+  clerkId     String        @unique
+  name        String
+  lastName    String
+  email       String        @unique
+  role        String        @default("employee")
+  avatar      String?
+  chatHistory ChatHistory[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model ChatHistory {
+  id        String   @id @default(cuid())
+  messages  Json     @default("[]") // Array of message objects
+  title     String   @default("New Chat")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
