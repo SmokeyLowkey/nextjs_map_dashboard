@@ -23,14 +23,6 @@ export async function GET(request: NextRequest) {
     // Get role from public metadata
     let role = user.publicMetadata?.role as string;
 
-    // Log the role check
-    console.log('API Auth Check:', {
-      userId: user.id,
-      role: role || 'undefined',
-      publicMetadata: user.publicMetadata,
-      timestamp: new Date().toISOString()
-    });
-
     // If no role is set, default to demo
     if (!role) {
       role = 'demo';
@@ -108,13 +100,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Log the response data
-    console.log('Database response:', {
-      count: branches.length,
-      hasData: branches.length > 0,
-      timestamp: new Date().toISOString()
-    });
-
     // Return the response with explicit headers
     return new NextResponse(
       JSON.stringify(branches),
@@ -166,14 +151,6 @@ export async function POST(req: NextRequest) {
     // Get role from public metadata
     const role = user.publicMetadata?.role as string;
 
-    // Log the role check
-    console.log('Role check:', {
-      userId: user.id,
-      role: role || 'undefined',
-      publicMetadata: user.publicMetadata,
-      timestamp: new Date().toISOString()
-    });
-
     // Check permissions
     if (!role || ['employee', 'demo'].includes(role)) {
       return new NextResponse(
@@ -190,15 +167,6 @@ export async function POST(req: NextRequest) {
     // Ensure coordinates are numbers
     const latitude = typeof data.latitude === 'string' ? parseFloat(data.latitude) : data.latitude;
     const longitude = typeof data.longitude === 'string' ? parseFloat(data.longitude) : data.longitude;
-
-    // Log incoming data for debugging
-    console.log('Creating branch with data:', {
-      departments: data.departments.map((dept: any) => ({
-        name: dept.name,
-        notes: dept.notes,
-        contactCount: dept.contacts?.length
-      }))
-    });
 
     const branch = await prisma.branch.create({
       data: {

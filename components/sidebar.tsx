@@ -23,18 +23,6 @@ export default function SidebarComponent() {
 
   useEffect(() => {
     if (isLoaded) {
-      console.log('Detailed User Information:', {
-        id: user?.id || 'Not logged in',
-        email: user?.primaryEmailAddress?.emailAddress,
-        firstName: user?.firstName,
-        lastName: user?.lastName,
-        role: userRole || 'undefined - Please set role in Clerk Dashboard',
-        hasPublicMetadata: user?.publicMetadata !== undefined,
-        fullPublicMetadata: user?.publicMetadata,
-        isLoaded: isLoaded,
-        timestamp: new Date().toISOString()
-      })
-
       if (!userRole) {
         console.warn('Warning: No role defined for user. Please set role in Clerk Dashboard.')
       }

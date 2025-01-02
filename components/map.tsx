@@ -15,12 +15,6 @@ interface MapComponentProps {
 }
 
 export default function MapComponent({ branches, onBranchClick, selectedBranch }: MapComponentProps) {
-  console.log('Initial branches prop:', branches?.map(b => ({
-    id: b.id,
-    name: b.branchName,
-    deptCount: b.departments?.length,
-    deptNotes: b.departments?.map(d => ({ name: d.name, hasNotes: !!d.notes }))
-  })));
 
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -36,7 +30,6 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
   const startHeight = useRef<number>(0);
   // Initialize with all branches since filters are all active by default
   const [filteredBranches, setFilteredBranches] = useState<Branch[]>(() => {
-    console.log('Setting initial filtered branches');
     return branches;
   });
 
@@ -631,31 +624,8 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
     map.current?.on('click', 'unclustered-point', (e) => {
       if (e.features?.[0]?.properties) {
         const properties = e.features[0].properties;
-        console.log('Raw feature properties:', properties);
         const branch = filteredBranches.find(b => b.id === properties.id);
-        console.log('Found branch in filteredBranches:', branch);
         if (branch && onBranchClick) {
-          console.log('Branch details:');
-          console.log('- ID:', branch.id);
-          console.log('- Name:', branch.branchName);
-          console.log('- Departments:', branch.departments?.length || 0);
-          branch.departments?.forEach((dept, i) => {
-            console.log(`\nDepartment ${i + 1}:`, dept.name);
-            console.log('- Raw notes:', JSON.stringify(dept.notes));
-            console.log('- Notes type:', typeof dept.notes);
-            if (dept.notes && typeof dept.notes === 'object') {
-              console.log('- Notes content:', JSON.stringify(dept.notes.content));
-            }
-            console.log('- Contacts:', dept.contacts?.length || 0);
-            dept.contacts?.forEach((contact, j) => {
-              console.log(`  Contact ${j + 1}:`, contact.jobTitle);
-              console.log('  - Raw notes:', JSON.stringify(contact.notes));
-              console.log('  - Notes type:', typeof contact.notes);
-              if (contact.notes && typeof contact.notes === 'object') {
-                console.log('  - Notes content:', JSON.stringify(contact.notes.content));
-              }
-            });
-          });
           setIsPanelOpen(true);
           onBranchClick(branch);
         }

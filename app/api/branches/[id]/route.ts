@@ -19,14 +19,6 @@ export async function GET(request: Request) {
     // Get role from public metadata
     let role = user.publicMetadata?.role as string;
 
-    // Log the role check
-    console.log('API Auth Check:', {
-      userId: user.id,
-      role: role || 'undefined',
-      publicMetadata: user.publicMetadata,
-      timestamp: new Date().toISOString()
-    });
-
     // If no role is set, default to demo
     if (!role) {
       role = 'demo';
@@ -117,13 +109,6 @@ export async function PUT(request: Request) {
     // Get role from public metadata
     let role = user.publicMetadata?.role as string;
 
-    console.log('Role check:', {
-      userId: user.id,
-      role: role || 'undefined',
-      publicMetadata: user.publicMetadata,
-      timestamp: new Date().toISOString()
-    });
-
     // If no role is set, default to demo
     if (!role) {
       role = 'demo';
@@ -145,15 +130,6 @@ export async function PUT(request: Request) {
     // Ensure coordinates are numbers
     const latitude = typeof data.latitude === 'string' ? parseFloat(data.latitude) : data.latitude;
     const longitude = typeof data.longitude === 'string' ? parseFloat(data.longitude) : data.longitude;
-
-    // Log incoming data for debugging
-    console.log('Updating branch with data:', {
-      departments: data.departments.map((dept: any) => ({
-        name: dept.name,
-        notes: dept.notes,
-        contactCount: dept.contacts?.length
-      }))
-    });
 
     // Delete existing departments and contacts
     await prisma.contact.deleteMany({
@@ -259,13 +235,6 @@ export async function DELETE(request: Request) {
 
     // Get role from public metadata
     let role = user.publicMetadata?.role as string;
-
-    console.log('Role check:', {
-      userId: user.id,
-      role: role || 'undefined',
-      publicMetadata: user.publicMetadata,
-      timestamp: new Date().toISOString()
-    });
 
     // If no role is set, default to demo
     if (!role) {
