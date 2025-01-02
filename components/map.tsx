@@ -411,12 +411,46 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
                 const status = getBranchStatus(branch);
                 const localTime = getBranchLocalTime(branch);
                 
+                // Remove any existing popups first
+                popupsRef.current.forEach(({ popup, interval }) => {
+                  popup.remove();
+                  if (interval) clearInterval(interval);
+                });
+                popupsRef.current = [];
+
                 // Create and store popup reference
                 const popup = new mapboxgl.Popup({
                   closeButton: false,
                   closeOnClick: false,
-                  className: 'branch-popup'
-                }).setLngLat([lng, lat]);
+                  className: 'branch-popup',
+                  maxWidth: '300px'
+                })
+                .setLngLat([lng, lat])
+                .on('open', () => {
+                  const popupEl = popup.getElement();
+                  if (popupEl) {
+                    // Use a WeakMap to store hover state
+                    const hoverState = new WeakMap<mapboxgl.Popup, boolean>();
+                    // Add hover and scroll listeners to the popup
+                    popupEl.addEventListener('mouseenter', () => {
+                      hoverState.set(popup, true);
+                    });
+                    popupEl.addEventListener('mouseleave', () => {
+                      hoverState.set(popup, false);
+                      // Only remove if mouse is not over the point
+                      if (!map.current?.getCanvas().style.cursor) {
+                        popup.remove();
+                      }
+                    });
+                    // Prevent map zoom when scrolling popup content
+                    popupEl.addEventListener('wheel', (e) => {
+                      e.stopPropagation();
+                    });
+                    // Store the WeakMap reference on the popup element
+                    popupEl.setAttribute('data-hover-state', '');
+                    (popupEl as any)._hoverState = hoverState;
+                  }
+                });
                 
                 // Function to update popup content
                 const updatePopupContent = () => {
@@ -461,12 +495,21 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
         map.current?.on('mouseleave', 'unclustered-point', () => {
           if (map.current) {
             map.current.getCanvas().style.cursor = '';
-            // Remove any open popups
+            // Only remove popups if not being hovered
             popupsRef.current.forEach(({ popup, interval }) => {
-              popup.remove();
-              if (interval) clearInterval(interval);
+              const popupEl = popup.getElement();
+              const hoverState = popupEl && (popupEl as any)._hoverState as WeakMap<mapboxgl.Popup, boolean>;
+              if (!hoverState?.get(popup)) {
+                popup.remove();
+                if (interval) clearInterval(interval);
+              }
             });
-            popupsRef.current = [];
+            // Only keep popups that are being hovered
+            popupsRef.current = popupsRef.current.filter(({ popup }) => {
+              const popupEl = popup.getElement();
+              const hoverState = popupEl && (popupEl as any)._hoverState as WeakMap<mapboxgl.Popup, boolean>;
+              return hoverState?.get(popup);
+            });
 
             if (hoveredStateId !== null) {
               map.current.setFeatureState(

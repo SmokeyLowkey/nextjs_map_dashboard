@@ -35,9 +35,9 @@ export function BranchFilter({
   selectedBranch,
   onAddressSelect
 }: BranchFilterProps) {
-  // Initialize with all branch types selected
+  // Initialize with no branch types selected
   const branchTypes = ["A", "T", "C"]
-  const [activeFilters, setActiveFilters] = useState<string[]>(branchTypes)
+  const [activeFilters, setActiveFilters] = useState<string[]>([])
   const [searchValue, setSearchValue] = useState("")
   const [searchResults, setSearchResults] = useState<GeocodingFeature[]>([])
   const [isSearching, setIsSearching] = useState(false)
@@ -148,6 +148,21 @@ export function BranchFilter({
                 size="sm"
                 onClick={() => toggleFilter(type)}
                 className="min-w-[40px]"
+                style={{
+                  backgroundColor: activeFilters.includes(type) 
+                    ? type === "A" 
+                      ? "#22c55e" 
+                      : type === "C"
+                      ? "#fbbf24"
+                      : "#ef4444"
+                    : "transparent",
+                  borderColor: type === "A" 
+                    ? "#22c55e" 
+                    : type === "C"
+                    ? "#fbbf24"
+                    : "#ef4444",
+                  color: activeFilters.includes(type) ? "white" : "inherit"
+                }}
               >
                 {type}
                 {activeFilters.includes(type) && (

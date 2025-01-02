@@ -89,11 +89,20 @@ export async function GET(request: NextRequest) {
         branch.toll = branch.toll ? '***-***-****' : null;
         branch.itPhone = branch.itPhone ? '***-***-****' : null;
 
-        // Mask department contacts
+        // Mask department contacts and notes
         branch.departments.forEach(dept => {
+          // Censor department notes
+          if (dept.notes) {
+            dept.notes = { content: '[Content hidden for demo users]' };
+          }
+          
           dept.contacts.forEach(contact => {
             contact.email = contact.email ? '****@****.***' : null;
             contact.phone = contact.phone ? '***-***-****' : null;
+            // Censor contact notes
+            if (contact.notes) {
+              contact.notes = { content: '[Content hidden for demo users]' };
+            }
           });
         });
       });
