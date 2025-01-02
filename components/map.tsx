@@ -15,10 +15,17 @@ interface MapComponentProps {
 }
 
 export default function MapComponent({ branches, onBranchClick, selectedBranch }: MapComponentProps) {
+  console.log('Initial branches prop:', branches?.map(b => ({
+    id: b.id,
+    name: b.branchName,
+    deptCount: b.departments?.length,
+    deptNotes: b.departments?.map(d => ({ name: d.name, hasNotes: !!d.notes }))
+  })));
+
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
-  const popupsRef = useRef<mapboxgl.Popup[]>([]);
+  const popupsRef = useRef<{ popup: mapboxgl.Popup; interval: NodeJS.Timeout | null }[]>([]);
   const searchMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const searchPopupRef = useRef<mapboxgl.Popup | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -27,9 +34,11 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
   const [isResizing, setIsResizing] = useState(false);
   const startResizeY = useRef<number>(0);
   const startHeight = useRef<number>(0);
-  const [activePopupBranch, setActivePopupBranch] = useState<Branch | null>(null);
   // Initialize with all branches since filters are all active by default
-  const [filteredBranches, setFilteredBranches] = useState<Branch[]>(branches);
+  const [filteredBranches, setFilteredBranches] = useState<Branch[]>(() => {
+    console.log('Setting initial filtered branches');
+    return branches;
+  });
 
   // Function to clean up search marker and popup
   const cleanupSearch = () => {
@@ -213,56 +222,6 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
     }
   };
 
-  // Update active popup content
-  useEffect(() => {
-    if (!activePopupBranch) return;
-
-    const updatePopupContent = () => {
-      const popup = popupsRef.current.find(p => p.isOpen());
-      if (popup) {
-        const status = getBranchStatus(activePopupBranch);
-        const localTime = getBranchLocalTime(activePopupBranch);
-
-        // Remove any existing popup styles
-        const existingStyle = document.querySelector('style[data-popup-style]');
-        if (existingStyle) {
-          existingStyle.remove();
-        }
-
-        // Add new popup styles with current status color
-        const style = document.createElement('style');
-        style.setAttribute('data-popup-style', 'true');
-        style.textContent = `
-          .branch-popup .mapboxgl-popup-content {
-            background-color: ${status.color};
-            color: white;
-            padding: 10px;
-            border-radius: 4px;
-            font-family: system-ui, -apple-system, sans-serif;
-          }
-          .branch-popup .mapboxgl-popup-tip {
-            border-top-color: ${status.color};
-          }
-        `;
-        document.head.appendChild(style);
-
-        popup.setHTML(`
-          <div>
-            <div class="font-bold">${activePopupBranch.branchName}</div>
-            <div>Local Time: ${localTime}</div>
-            <div>Status: ${status.status}</div>
-          </div>
-        `);
-      }
-    };
-
-    // Update immediately and then every second
-    updatePopupContent();
-    const interval = setInterval(updatePopupContent, 1000);
-
-    return () => clearInterval(interval);
-  }, [activePopupBranch]);
-
   const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
     setIsResizing(true);
     startResizeY.current = e.clientY;
@@ -322,6 +281,203 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
       });
 
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+      map.current.on('load', () => {
+        // Add a source with cluster configuration
+        map.current?.addSource('branches', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: []
+          },
+          cluster: true,
+          clusterMaxZoom: 14,  // Start breaking clusters at zoom level 14
+          clusterRadius: 35,   // Smaller radius for tighter clusters
+          maxzoom: 18,         // Maximum zoom level
+          clusterProperties: { // Track branch types in clusters
+            'a-count': ['+', ['case', ['==', ['slice', ['get', 'branchId'], 0, 1], 'A'], 1, 0]],
+            'c-count': ['+', ['case', ['==', ['slice', ['get', 'branchId'], 0, 1], 'C'], 1, 0]],
+            't-count': ['+', ['case', ['==', ['slice', ['get', 'branchId'], 0, 1], 'T'], 1, 0]]
+          }
+        });
+
+        // Add cluster circles layer
+        map.current?.addLayer({
+          id: 'clusters',
+          type: 'circle',
+          source: 'branches',
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': [
+              'case',
+              ['>', ['get', 'a-count'], ['max', ['get', 'c-count'], ['get', 't-count']]], '#22c55e',  // A branches
+              ['>', ['get', 'c-count'], ['max', ['get', 'a-count'], ['get', 't-count']]], '#fbbf24',  // C branches
+              ['>', ['get', 't-count'], ['max', ['get', 'a-count'], ['get', 'c-count']]], '#ef4444',  // T branches
+              '#6b7280'  // Mixed/unknown
+            ],
+            'circle-radius': [
+              'case',
+              ['boolean', ['feature-state', 'hover'], false],
+              [
+                'step',
+                ['get', 'point_count'],
+                18,  // 20% larger than base size
+                10,
+                24,  // 20% larger than base size
+                30,
+                32   // 20% larger than base size
+              ],
+              [
+                'step',
+                ['get', 'point_count'],
+                15,
+                10,
+                20,
+                30,
+                28
+              ]
+            ]
+          }
+        });
+
+        // Add cluster count text layer
+        map.current?.addLayer({
+          id: 'cluster-count',
+          type: 'symbol',
+          source: 'branches',
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': '{point_count_abbreviated}',
+            'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+            'text-size': 12
+          },
+          paint: {
+            'text-color': '#ffffff'
+          }
+        });
+
+        // Add unclustered point layer
+        map.current?.addLayer({
+          id: 'unclustered-point',
+          type: 'circle',
+          source: 'branches',
+          filter: ['all', 
+            ['!', ['has', 'point_count']],
+            ['!', ['has', 'cluster']] // Ensure points in clusters don't show
+          ],
+          paint: {
+            'circle-color': ['get', 'color'],
+            'circle-radius': [
+              'case',
+              ['boolean', ['feature-state', 'hover'], false],
+              12,
+              10
+            ],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
+          }
+        });
+
+        // Add hover interactions for individual points
+        let hoveredStateId: string | null = null;
+
+        map.current?.on('mouseenter', 'unclustered-point', (e) => {
+          if (map.current) {
+            map.current.getCanvas().style.cursor = 'pointer';
+            
+            if (e.features?.[0]?.properties && e.features[0].geometry.type === 'Point') {
+              const properties = e.features[0].properties;
+              if (properties && properties.id) {
+                const featureId = properties.id;
+                if (typeof featureId === 'string' || typeof featureId === 'number') {
+                  if (hoveredStateId !== null) {
+                    map.current.setFeatureState(
+                      { source: 'branches', id: hoveredStateId },
+                      { hover: false }
+                    );
+                  }
+                  hoveredStateId = String(featureId);
+                  map.current.setFeatureState(
+                    { source: 'branches', id: String(featureId) },
+                    { hover: true }
+                  );
+                }
+              }
+
+              const branch = filteredBranches.find(b => b.id === properties?.id);
+              
+              if (branch) {
+                const [lng, lat] = (e.features[0].geometry as GeoJSON.Point).coordinates;
+                const status = getBranchStatus(branch);
+                const localTime = getBranchLocalTime(branch);
+                
+                // Create and store popup reference
+                const popup = new mapboxgl.Popup({
+                  closeButton: false,
+                  closeOnClick: false,
+                  className: 'branch-popup'
+                }).setLngLat([lng, lat]);
+                
+                // Function to update popup content
+                const updatePopupContent = () => {
+                  const status = getBranchStatus(branch);
+                  const localTime = getBranchLocalTime(branch);
+                  popup.setHTML(`
+                    <style>
+                      .branch-popup .mapboxgl-popup-content {
+                        background-color: ${status.color};
+                        color: white;
+                        padding: 10px;
+                        border-radius: 4px;
+                        font-family: system-ui, -apple-system, sans-serif;
+                      }
+                      .branch-popup .mapboxgl-popup-tip {
+                        border-top-color: ${status.color};
+                      }
+                    </style>
+                    <div>
+                      <div class="font-bold">${branch.branchName} (${branch.branchId})</div>
+                      <div>Local Time: ${localTime}</div>
+                      <div>Status: ${status.status}</div>
+                    </div>
+                  `);
+                };
+
+                // Initial update and add to map
+                updatePopupContent();
+                popup.addTo(map.current);
+
+                // Set up interval for live updates
+                const interval = setInterval(updatePopupContent, 1000);
+                popupsRef.current.push({ popup, interval });
+                
+                // Remove interval when popup is removed
+                popup.on('close', () => clearInterval(interval));
+              }
+            }
+          }
+        });
+
+        map.current?.on('mouseleave', 'unclustered-point', () => {
+          if (map.current) {
+            map.current.getCanvas().style.cursor = '';
+            // Remove any open popups
+            popupsRef.current.forEach(({ popup, interval }) => {
+              popup.remove();
+              if (interval) clearInterval(interval);
+            });
+            popupsRef.current = [];
+
+            if (hoveredStateId !== null) {
+              map.current.setFeatureState(
+                { source: 'branches', id: hoveredStateId },
+                { hover: false }
+              );
+              hoveredStateId = null;
+            }
+          }
+        });
+      });
     } catch (error) {
       console.error('Error initializing map:', error);
     }
@@ -359,61 +515,235 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
 
     // Clear existing markers and popups
     markersRef.current.forEach(marker => marker.remove());
-    popupsRef.current.forEach(popup => popup.remove());
+            popupsRef.current.forEach(({ popup, interval }) => {
+              popup.remove();
+              if (interval) clearInterval(interval);
+            });
     markersRef.current = [];
     popupsRef.current = [];
 
-    filteredBranches.forEach((branch) => {
-      try {
-        const el = document.createElement('div');
-        el.className = 'cursor-pointer';
-        el.style.width = '30px';
-        el.style.height = '30px';
-        el.style.backgroundImage = 'url(/dark-logo.png)';
-        el.style.backgroundSize = 'cover';
-        el.style.backgroundColor = getMarkerColor(branch.branchId);
-        el.style.borderRadius = '50%';
-        el.style.border = '2px solid white';
-        el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    // Cleanup function to remove event listeners and popups
+    const cleanup = () => {
+      if (map.current) {
+        // Remove layer event listeners with empty handler functions to satisfy TypeScript
+        map.current.off('click', 'clusters', () => {});
+        map.current.off('click', 'unclustered-point', () => {});
+        map.current.off('mouseenter', 'clusters', () => {});
+        map.current.off('mouseleave', 'clusters', () => {});
+      }
+      // Clean up popups
+      popupsRef.current.forEach(({ popup, interval }) => {
+        popup.remove();
+        if (interval) clearInterval(interval);
+      });
+      popupsRef.current = [];
+    };
 
-        // Create popup
-        const popup = new mapboxgl.Popup({
-          closeButton: false,
-          closeOnClick: false,
-          offset: 25,
-          className: 'branch-popup'
+    // Convert branches to GeoJSON
+    const geojsonData = {
+      type: 'FeatureCollection',
+      features: filteredBranches.map(branch => ({
+        type: 'Feature',
+        id: branch.id,
+        geometry: {
+          type: 'Point',
+          coordinates: [branch.longitude, branch.latitude]
+        },
+        properties: {
+          color: getMarkerColor(branch.branchId),
+          ...branch
+        }
+      }))
+    };
+
+    // Update the source data
+    const source = map.current?.getSource('branches');
+    if (source) {
+      (source as mapboxgl.GeoJSONSource).setData(geojsonData as any);
+    }
+
+    // Handle clicks on clusters
+    map.current?.on('click', 'clusters', (e: mapboxgl.MapMouseEvent & { features?: mapboxgl.MapboxGeoJSONFeature[] }) => {
+      const features = e.features || [];
+      if (features.length === 0) return;
+
+      const feature = features[0];
+      const clusterId = feature.properties?.cluster_id;
+      const geometry = feature.geometry as GeoJSON.Point | undefined;
+      
+      if (!clusterId || !geometry) return;
+      
+      const source = map.current?.getSource('branches') as mapboxgl.GeoJSONSource;
+      source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+        if (err) return;
+
+        map.current?.easeTo({
+          center: [geometry.coordinates[0], geometry.coordinates[1]],
+          zoom: zoom || map.current?.getZoom() || 3
         });
+      });
+    });
 
-        const marker = new mapboxgl.Marker(el)
-          .setLngLat([branch.longitude, branch.latitude])
-          .addTo(map.current!);
-
-        // Show popup on hover
-        el.addEventListener('mouseenter', () => {
-          setActivePopupBranch(branch);
-          popup.setLngLat([branch.longitude, branch.latitude]).addTo(map.current!);
-        });
-
-        el.addEventListener('mouseleave', () => {
-          setActivePopupBranch(null);
-          popup.remove();
-        });
-
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
+    // Handle clicks on individual points
+    map.current?.on('click', 'unclustered-point', (e) => {
+      if (e.features?.[0]?.properties) {
+        const properties = e.features[0].properties;
+        console.log('Raw feature properties:', properties);
+        const branch = filteredBranches.find(b => b.id === properties.id);
+        console.log('Found branch in filteredBranches:', branch);
+        if (branch && onBranchClick) {
+          console.log('Branch details:');
+          console.log('- ID:', branch.id);
+          console.log('- Name:', branch.branchName);
+          console.log('- Departments:', branch.departments?.length || 0);
+          branch.departments?.forEach((dept, i) => {
+            console.log(`\nDepartment ${i + 1}:`, dept.name);
+            console.log('- Raw notes:', JSON.stringify(dept.notes));
+            console.log('- Notes type:', typeof dept.notes);
+            if (dept.notes && typeof dept.notes === 'object') {
+              console.log('- Notes content:', JSON.stringify(dept.notes.content));
+            }
+            console.log('- Contacts:', dept.contacts?.length || 0);
+            dept.contacts?.forEach((contact, j) => {
+              console.log(`  Contact ${j + 1}:`, contact.jobTitle);
+              console.log('  - Raw notes:', JSON.stringify(contact.notes));
+              console.log('  - Notes type:', typeof contact.notes);
+              if (contact.notes && typeof contact.notes === 'object') {
+                console.log('  - Notes content:', JSON.stringify(contact.notes.content));
+              }
+            });
+          });
           setIsPanelOpen(true);
-          if (onBranchClick) {
-            onBranchClick(branch);
-          }
-        });
-
-        markersRef.current.push(marker);
-        popupsRef.current.push(popup);
-      } catch (error) {
-        console.error('Error adding marker for branch:', branch, error);
+          onBranchClick(branch);
+        }
       }
     });
 
+    // Add hover interactions for clusters
+    let hoveredClusterId: string | null = null;
+
+    map.current?.on('mouseenter', 'clusters', (e) => {
+      if (map.current) {
+        map.current.getCanvas().style.cursor = 'pointer';
+        
+        if (e.features?.[0]) {
+          if (hoveredClusterId) {
+            map.current.setFeatureState(
+              { source: 'branches', id: hoveredClusterId },
+              { hover: false }
+            );
+          }
+          hoveredClusterId = e.features[0].id as string;
+          map.current.setFeatureState(
+            { source: 'branches', id: hoveredClusterId },
+            { hover: true }
+          );
+
+          const feature = e.features?.[0];
+          if (!feature) return;
+          
+          const clusterId = feature.properties?.cluster_id;
+          const pointCount = feature.properties?.point_count || 0;
+          const geometry = feature.geometry as GeoJSON.Point;
+          
+          if (!clusterId || !geometry) return;
+          
+          const [lng, lat] = geometry.coordinates;
+          const source = map.current?.getSource('branches') as mapboxgl.GeoJSONSource;
+          source.getClusterLeaves(clusterId, pointCount, 0, (err, clusterFeatures) => {
+            if (err || !clusterFeatures) return;
+
+            // Create a single popup for the cluster with branch names
+            const popup = new mapboxgl.Popup({
+              closeButton: false,
+              closeOnClick: false,
+              className: 'cluster-popup'
+            }).setLngLat([lng, lat]);
+
+            // Function to update popup content
+            const updatePopupContent = () => {
+              const branchesInfo = clusterFeatures
+                .map(f => {
+                  const branch = filteredBranches.find(b => b.id === f.properties?.id);
+                  if (!branch) return null;
+                  const status = getBranchStatus(branch);
+                  const localTime = getBranchLocalTime(branch);
+                  return `
+                    <div class="mb-3 last:mb-0">
+                      <div class="font-bold" style="color: ${status.color}">${branch.branchName} (${branch.branchId})</div>
+                      <div>Local Time: ${localTime}</div>
+                      <div>Status: ${status.status}</div>
+                    </div>
+                  `;
+                })
+                .filter(Boolean)
+                .join('');
+
+              popup.setHTML(`
+                <style>
+                  .cluster-popup .mapboxgl-popup-content {
+                    background-color: #1f2937;
+                    color: white;
+                    padding: 10px;
+                    border-radius: 4px;
+                    font-family: system-ui, -apple-system, sans-serif;
+                    max-height: 300px;
+                    overflow-y: auto;
+                  }
+                  .cluster-popup .mapboxgl-popup-tip {
+                    border-top-color: #1f2937;
+                  }
+                </style>
+                <div>
+                  ${branchesInfo}
+                </div>
+              `);
+            };
+
+            // Initial update
+            updatePopupContent();
+            popup.addTo(map.current!);
+
+            // Set up interval for live updates
+            const interval = setInterval(updatePopupContent, 1000);
+            popupsRef.current.push({ popup, interval });
+
+            // Remove interval when popup is removed
+            popup.on('close', () => {
+              if (interval) clearInterval(interval);
+            });
+          });
+
+        }
+      }
+    });
+
+    map.current?.on('mouseleave', 'clusters', () => {
+      if (map.current) {
+        map.current.getCanvas().style.cursor = '';
+        
+        // Remove popups and clear intervals
+        popupsRef.current.forEach(({ popup, interval }) => {
+          popup.remove();
+          if (interval) clearInterval(interval);
+        });
+        popupsRef.current = [];
+
+        if (hoveredClusterId) {
+          map.current.setFeatureState(
+            { source: 'branches', id: hoveredClusterId },
+            { hover: false }
+          );
+          hoveredClusterId = null;
+        }
+
+        // Force remove any remaining popups
+        const popups = document.querySelectorAll('.mapboxgl-popup');
+        popups.forEach(popup => popup.remove());
+      }
+    });
+
+    // Fit bounds to show all filtered branches
     if (filteredBranches.length > 0) {
       try {
         const bounds = new mapboxgl.LngLatBounds();
@@ -428,6 +758,9 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
         console.error('Error fitting bounds:', error);
       }
     }
+
+    // Cleanup function for unmounting
+    return cleanup;
   }, [filteredBranches, onBranchClick]);
 
   useEffect(() => {
@@ -485,7 +818,6 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
               el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
 
               // Create popup for search marker
-              // Create popup for search marker with inline styles
               searchPopupRef.current = new mapboxgl.Popup({
                 closeButton: false,
                 closeOnClick: false,
@@ -575,9 +907,9 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
             </div>
             
             <div className="flex-1 overflow-y-auto">
-              <div className="px-6 py-4">
+              <div className="px-6 py-6 space-y-6">
                 {/* Contact Information */}
-                <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                <div className="bg-gray-50 p-5 rounded-lg shadow-sm">
                   <p className="text-gray-700 mb-3">{selectedBranch.address}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <p className="text-sm text-gray-600">
@@ -623,25 +955,33 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
                       </button>
 
                       <div
-                        className={`transition-all duration-200 ease-in-out ${
-                          expandedDepts.includes(dept.name) ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
+                        className={`transition-all duration-300 ease-in-out ${
+                          expandedDepts.includes(dept.name) ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
                         } overflow-y-auto`}
                       >
                         <div className="p-4 bg-white border-t border-gray-100">
-                          {dept.notes?.content && (
-                            <div className="mb-4 bg-blue-50 text-blue-700 p-3 rounded-lg text-sm">
-                              {dept.notes.content}
+                          {dept.notes && typeof dept.notes === 'object' && (dept.notes as any).content?.trim() && (
+                            <div className="mb-4 bg-blue-50 border border-blue-200 text-blue-700 p-4 rounded-lg">
+                              <div className="flex items-center mb-2">
+                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="font-medium">Department Notes</span>
+                              </div>
+                              <div className="text-blue-800 whitespace-pre-wrap">
+                                {(dept.notes as any).content}
+                              </div>
                             </div>
                           )}
                           
-                          <div className="mb-4 bg-gray-50 rounded-lg py-2">
+                          <div className="mb-6 bg-gray-50 rounded-lg py-3 px-2">
                             {formatDepartmentHours(dept)}
                           </div>
 
                           {dept.contacts.length > 0 && (
                             <div className="space-y-3">
                               {dept.contacts.map((contact, idx: number) => (
-                                <div key={idx} className="bg-gray-50 p-3 rounded-lg">
+                                <div key={idx} className="bg-gray-50 p-4 rounded-lg shadow-sm">
                                   <div className="font-medium text-gray-900">{contact.jobTitle}</div>
                                   {contact.name && <div className="text-gray-700 mt-1">{contact.name}</div>}
                                   {contact.phone && (
@@ -654,9 +994,17 @@ export default function MapComponent({ branches, onBranchClick, selectedBranch }
                                       <span className="font-medium">Email:</span> {contact.email}
                                     </div>
                                   )}
-                                  {contact.notes?.content && (
-                                    <div className="text-sm text-gray-600 mt-2 bg-gray-100 p-2 rounded">
-                                      {contact.notes.content}
+                                  {contact.notes && typeof contact.notes === 'object' && (contact.notes as any).content?.trim() && (
+                                    <div className="mt-3 bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-lg">
+                                      <div className="flex items-center mb-2">
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span className="font-medium text-sm">Contact Notes</span>
+                                      </div>
+                                      <div className="text-blue-800 text-sm whitespace-pre-wrap">
+                                        {(contact.notes as any).content}
+                                      </div>
                                     </div>
                                   )}
                                 </div>

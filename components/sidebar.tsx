@@ -61,7 +61,6 @@ export default function SidebarComponent() {
         label: "Map", 
         href: "/dashboard",
         subItems: userRole !== 'org:employee' && userRole !== 'org:demo' ? [
-          { icon: PlusCircle, label: "Create Branch", href: "/dashboard/create" },
           { icon: List, label: "Manage Branches", href: "/dashboard/manage" },
         ] : undefined
       },

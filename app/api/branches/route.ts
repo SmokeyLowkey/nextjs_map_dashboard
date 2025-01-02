@@ -49,6 +49,37 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // Parse JSON notes
+    branches.forEach(branch => {
+      branch.departments.forEach(dept => {
+        // Parse department notes
+        if (dept.notes) {
+          try {
+            dept.notes = typeof dept.notes === 'string' 
+              ? JSON.parse(dept.notes) 
+              : dept.notes;
+          } catch (e) {
+            console.error('Error parsing department notes:', e);
+            dept.notes = {};
+          }
+        }
+
+        // Parse contact notes
+        dept.contacts.forEach(contact => {
+          if (contact.notes) {
+            try {
+              contact.notes = typeof contact.notes === 'string'
+                ? JSON.parse(contact.notes)
+                : contact.notes;
+            } catch (e) {
+              console.error('Error parsing contact notes:', e);
+              contact.notes = {};
+            }
+          }
+        });
+      });
+    });
+
     // If user has demo role, mask sensitive information
     if (role === 'demo') {
       branches.forEach(branch => {
@@ -151,6 +182,15 @@ export async function POST(req: NextRequest) {
     const latitude = typeof data.latitude === 'string' ? parseFloat(data.latitude) : data.latitude;
     const longitude = typeof data.longitude === 'string' ? parseFloat(data.longitude) : data.longitude;
 
+    // Log incoming data for debugging
+    console.log('Creating branch with data:', {
+      departments: data.departments.map((dept: any) => ({
+        name: dept.name,
+        notes: dept.notes,
+        contactCount: dept.contacts?.length
+      }))
+    });
+
     const branch = await prisma.branch.create({
       data: {
         branchId: data.branchId,
@@ -166,7 +206,7 @@ export async function POST(req: NextRequest) {
         departments: {
           create: data.departments.map((dept: any) => ({
             name: dept.name,
-            notes: dept.notes,
+            notes: dept.notes ? { content: dept.notes.content || '' } : { content: '' },
             mondayHours: dept.mondayHours,
             tuesdayHours: dept.tuesdayHours,
             wednesdayHours: dept.wednesdayHours,
@@ -179,7 +219,8 @@ export async function POST(req: NextRequest) {
                 jobTitle: contact.jobTitle,
                 phone: contact.phone,
                 email: contact.email,
-                name: contact.name
+                name: contact.name,
+                notes: contact.notes ? { content: contact.notes.content || '' } : { content: '' }
               }))
             }
           }))

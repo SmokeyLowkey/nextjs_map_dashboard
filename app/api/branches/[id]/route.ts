@@ -146,6 +146,15 @@ export async function PUT(request: Request) {
     const latitude = typeof data.latitude === 'string' ? parseFloat(data.latitude) : data.latitude;
     const longitude = typeof data.longitude === 'string' ? parseFloat(data.longitude) : data.longitude;
 
+    // Log incoming data for debugging
+    console.log('Updating branch with data:', {
+      departments: data.departments.map((dept: any) => ({
+        name: dept.name,
+        notes: dept.notes,
+        contactCount: dept.contacts?.length
+      }))
+    });
+
     // Delete existing departments and contacts
     await prisma.contact.deleteMany({
       where: {
@@ -180,7 +189,7 @@ export async function PUT(request: Request) {
         departments: {
           create: data.departments.map((dept: any) => ({
             name: dept.name,
-            notes: dept.notes,
+            notes: dept.notes ? { content: dept.notes.content || '' } : { content: '' },
             mondayHours: dept.mondayHours,
             tuesdayHours: dept.tuesdayHours,
             wednesdayHours: dept.wednesdayHours,
@@ -193,7 +202,8 @@ export async function PUT(request: Request) {
                 jobTitle: contact.jobTitle,
                 phone: contact.phone,
                 email: contact.email,
-                name: contact.name
+                name: contact.name,
+                notes: contact.notes ? { content: contact.notes.content || '' } : { content: '' }
               }))
             }
           }))
