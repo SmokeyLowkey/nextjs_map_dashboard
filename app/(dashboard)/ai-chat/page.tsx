@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,6 +39,15 @@ export default function AIChatPage() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'error' | null>(null)
   const [isAiTyping, setIsAiTyping] = useState(false)
+
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages])
 
   // Fetch chat history
   useEffect(() => {
@@ -272,41 +281,46 @@ export default function AIChatPage() {
   const isAdmin = user?.publicMetadata?.role === 'admin'
 
   return (
-    <div className="h-full p-4 flex gap-4">
+    <div className="h-full p-4 flex gap-4 relative">
       {/* Chat History Sidebar */}
-      <Card className="w-72 flex flex-col h-full">
+      <Card className="flex flex-col h-full transition-all duration-300 ease-in-out hover:w-72 w-[60px] group">
         <CardHeader>
-          <CardTitle className="text-lg">Chat History</CardTitle>
+          <CardTitle className="text-lg flex items-center">
+            <MessageSquare className="w-5 h-5" />
+            <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              Chat History
+            </span>
+          </CardTitle>
         </CardHeader>
         <CardContent className="flex-grow overflow-hidden">
           <Button
             onClick={() => createNewChat()}
-            variant="outline"
-            className="w-full mb-4"
+            variant="ghost"
+            className="w-full mb-4 group-hover:bg-accent/50 transition-colors"
             disabled={isLoading}
           >
-            <PlusCircle className="w-4 h-4 mr-2" />
-            New Chat
+            <PlusCircle className="w-4 h-4" />
+            <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">New Chat</span>
           </Button>
           <ScrollArea className="h-[calc(100vh-220px)]">
             <div className="space-y-2">
               {chatHistory.map((chat) => (
                 <div
                   key={chat.id}
-                  className={`flex items-center justify-between group rounded-lg border p-2 hover:bg-accent cursor-pointer ${
+                  className={`flex items-center justify-between rounded-lg border p-2 hover:bg-accent cursor-pointer transition-colors ${
                     currentChatId === chat.id ? 'bg-accent' : ''
-                  }`}
+                  } group/item`}
                   onClick={() => loadChat(chat.id)}
                 >
                   <div className="flex items-center w-full gap-1">
                     <div className="flex items-center flex-1 min-w-0">
-                      <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
-                      <span className="truncate max-w-[160px]">{chat.title}</span>
+                      <MessageSquare className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate max-w-[160px] ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">{chat.title}</span>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="opacity-0 group-hover:opacity-100 flex-shrink-0 ml-1"
+                      className="opacity-0 group-hover/item:opacity-100 flex-shrink-0 ml-1 transition-opacity"
                       onClick={(e) => {
                         e.stopPropagation()
                         deleteChat(chat.id)
@@ -346,8 +360,8 @@ export default function AIChatPage() {
             )}
           </div>
         </CardHeader>
-        <CardContent className="flex-grow overflow-hidden">
-          <ScrollArea className="h-full pr-4 custom-scrollbar">
+        <CardContent className="flex-grow overflow-hidden h-[calc(100vh-280px)]">
+          <ScrollArea className="h-full pr-4">
             {messages.map((message, index) => (
               <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 animate-slide-in`}>
                 <div className={`flex items-end ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -381,6 +395,7 @@ export default function AIChatPage() {
                 {error}
               </div>
             )}
+            <div ref={scrollRef} />
           </ScrollArea>
         </CardContent>
         <CardFooter>
